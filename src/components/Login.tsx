@@ -19,18 +19,21 @@ export function Login({ onLogin }: LoginProps) {
   const [error, setError] = useState<string | null>(null);
 
   const checkUserProfile = async (userId: string) => {
-    const { data: existingProfile } = await supabase
-      .from('user_profiles')
-      .select('id, active')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data: profileData, error: profileError } = await supabase
+      .rpc('get_user_profile_status', { user_id: userId });
 
-    if (!existingProfile) {
+    if (profileError) {
+      await supabase.auth.signOut();
+      throw new Error(`Error al verificar perfil: ${profileError.message}`);
+    }
+
+    if (!profileData || profileData.length === 0) {
       await supabase.auth.signOut();
       throw new Error('Nombre de usuario o contraseña no encontrado');
     }
 
-    if (!existingProfile.active) {
+    const profile = profileData[0];
+    if (!profile.active) {
       await supabase.auth.signOut();
       throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
     }

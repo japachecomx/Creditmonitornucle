@@ -31,76 +31,70 @@ export default function App() {
   const checkUserProfile = async (userId: string) => {
     console.log('Checking profile for user:', userId);
 
-    const { data: existingProfile, error: selectError } = await supabase
-      .from('user_profiles')
-      .select('id, active')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data: profileData, error: profileError } = await supabase
+      .rpc('get_user_profile_status', { user_id: userId });
 
-    if (selectError) {
-      console.error('Error fetching profile:', selectError);
-      console.log('Waiting for profile to be accessible...');
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      console.log('Waiting for profile to be created...');
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const { data: retryProfile, error: retryError } = await supabase
-        .from('user_profiles')
-        .select('id, active')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: retryData, error: retryError } = await supabase
+        .rpc('get_user_profile_status', { user_id: userId });
 
       if (retryError) {
         console.error('Retry error:', retryError);
-        throw new Error(`Error de permisos: ${retryError.message}`);
+        throw new Error(`Error al verificar perfil: ${retryError.message}`);
       }
 
-      if (!retryProfile) {
+      if (!retryData || retryData.length === 0) {
         throw new Error('Usuario no registrado en el sistema');
       }
 
-      if (!retryProfile.active) {
+      const profile = retryData[0];
+      if (!profile.active) {
         throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
       }
 
-      return retryProfile.active;
+      console.log('Profile found after retry:', profile);
+      return profile.active;
     }
 
-    if (!existingProfile) {
+    if (!profileData || profileData.length === 0) {
       console.log('No profile found - waiting for trigger to create it');
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const { data: retryProfile, error: retryError } = await supabase
-        .from('user_profiles')
-        .select('id, active')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: retryData, error: retryError } = await supabase
+        .rpc('get_user_profile_status', { user_id: userId });
 
       if (retryError) {
         console.error('Retry error:', retryError);
         throw new Error(`Error al buscar perfil: ${retryError.message}`);
       }
 
-      if (!retryProfile) {
+      if (!retryData || retryData.length === 0) {
         throw new Error('Usuario no registrado en el sistema');
       }
 
-      if (!retryProfile.active) {
+      const profile = retryData[0];
+      if (!profile.active) {
         throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
       }
 
-      return retryProfile.active;
+      console.log('Profile found after retry:', profile);
+      return profile.active;
     }
 
-    if (!existingProfile.active) {
+    const profile = profileData[0];
+    if (!profile.active) {
       throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
     }
 
-    console.log('Profile found and active');
-    return existingProfile.active;
+    console.log('Profile found and active:', profile);
+    return profile.active;
   };
 
   useEffect(() => {
-    supabase.auth.signOut();
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
