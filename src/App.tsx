@@ -29,19 +29,46 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setIsAuthenticated(true);
-        setHasCompletedOnboarding(true);
-        setCurrentView('dashboard');
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+
+        if (session) {
+          console.log('Active session found:', session);
+          setIsAuthenticated(true);
+          setHasCompletedOnboarding(true);
+          setCurrentView('dashboard');
+        }
+      } catch (err) {
+        console.error('Error in checkSession:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+
+    checkSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session);
+
+      if (event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true);
+        setHasCompletedOnboarding(true);
+        setCurrentView('dashboard');
+        setLoading(false);
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setHasCompletedOnboarding(false);
+        setCurrentView('login');
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        setIsAuthenticated(true);
+      } else if (session) {
         setIsAuthenticated(true);
         setHasCompletedOnboarding(true);
         setCurrentView('dashboard');
@@ -120,11 +147,16 @@ export default function App() {
   };
 
   if (loading) {
+    const hasOAuthParams = window.location.hash.includes('access_token') ||
+                          window.location.search.includes('code=');
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-600">Cargando...</p>
+          <p className="text-slate-600 text-lg font-medium">
+            {hasOAuthParams ? 'Completando autenticación...' : 'Cargando...'}
+          </p>
         </div>
       </div>
     );

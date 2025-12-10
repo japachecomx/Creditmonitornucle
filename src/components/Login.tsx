@@ -22,16 +22,18 @@ export function Login({ onLogin }: LoginProps) {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
-      onLogin();
+
+      if (data.session) {
+        console.log('Login successful:', data.session);
+      }
     } catch (err: any) {
       setError(err.message || 'Error al iniciar sesión');
-    } finally {
       setLoading(false);
     }
   };
