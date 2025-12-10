@@ -26,7 +26,7 @@ export default function App() {
   const [selectedCreditId, setSelectedCreditId] = useState<string | null>(null);
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const checkUserProfile = async (userId: string) => {
     console.log('Checking profile for user:', userId);
@@ -99,20 +99,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        await supabase.auth.signOut();
-        setIsAuthenticated(false);
-        setHasCompletedOnboarding(false);
-        setCurrentView('login');
-      } catch (err) {
-        console.error('Error in checkSession:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkSession();
+    supabase.auth.signOut();
 
     const {
       data: { subscription },
