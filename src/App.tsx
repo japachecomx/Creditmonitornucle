@@ -29,14 +29,25 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const ensureUserProfileForOAuth = async (userId: string, userEmail: string, fullName?: string, provider?: string) => {
-    const { data: existingProfile } = await supabase
+    console.log('Checking profile for user:', { userId, userEmail, provider });
+
+    const { data: existingProfile, error: selectError } = await supabase
       .from('user_profiles')
       .select('id, active')
       .eq('id', userId)
       .maybeSingle();
 
+    if (selectError) {
+      console.error('Error fetching profile:', selectError);
+      throw new Error('Error al verificar el perfil de usuario');
+    }
+
     if (!existingProfile) {
+      console.log('No profile found, provider:', provider);
+
       if (provider && provider !== 'email') {
+        console.log('Creating new profile for OAuth user');
+
         const { error: profileError } = await supabase
           .from('user_profiles')
           .insert({
@@ -56,6 +67,7 @@ export default function App() {
           throw new Error('No se pudo crear el perfil de usuario');
         }
 
+        console.log('Profile created successfully');
         return true;
       } else {
         throw new Error('Usuario no registrado en el sistema');
@@ -66,6 +78,7 @@ export default function App() {
       throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
     }
 
+    console.log('Profile found and active');
     return existingProfile.active;
   };
 
@@ -111,7 +124,10 @@ export default function App() {
 
       if (event === 'SIGNED_IN' && session && session.user) {
         try {
+          console.log('SIGNED_IN event detected', session.user);
           const provider = session.user.app_metadata?.provider;
+          console.log('Provider:', provider);
+
           const hasProfile = await ensureUserProfileForOAuth(
             session.user.id,
             session.user.email || '',
@@ -119,18 +135,24 @@ export default function App() {
             provider
           );
 
+          console.log('Has profile:', hasProfile);
+
           if (hasProfile) {
+            console.log('Setting authenticated state');
             setIsAuthenticated(true);
             setHasCompletedOnboarding(true);
             setCurrentView('dashboard');
             setLoading(false);
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Error checking user profile:', err);
+          console.error('Error message:', err.message);
+          alert(`Error al autenticar: ${err.message}`);
           await supabase.auth.signOut();
           setIsAuthenticated(false);
           setHasCompletedOnboarding(false);
           setCurrentView('login');
+          setLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
