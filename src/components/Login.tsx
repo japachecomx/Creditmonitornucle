@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -11,12 +11,29 @@ interface LoginProps {
   onLogin: () => void;
 }
 
+const REMEMBER_ME_KEY = 'creditmonitor_remember_me';
+
 export function Login({ onLogin }: LoginProps) {
   const [showRegister, setShowRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedCredentials = localStorage.getItem(REMEMBER_ME_KEY);
+    if (savedCredentials) {
+      try {
+        const { email: savedEmail, password: savedPassword } = JSON.parse(savedCredentials);
+        setEmail(savedEmail);
+        setPassword(savedPassword);
+        setRememberMe(true);
+      } catch (err) {
+        localStorage.removeItem(REMEMBER_ME_KEY);
+      }
+    }
+  }, []);
 
   const checkUserProfile = async (userId: string) => {
     const { data: profileData, error: profileError } = await supabase
@@ -56,6 +73,13 @@ export function Login({ onLogin }: LoginProps) {
 
       if (data.session && data.user) {
         await checkUserProfile(data.user.id);
+
+        if (rememberMe) {
+          localStorage.setItem(REMEMBER_ME_KEY, JSON.stringify({ email, password }));
+        } else {
+          localStorage.removeItem(REMEMBER_ME_KEY);
+        }
+
         console.log('Login successful:', data.session);
       }
     } catch (err: any) {
@@ -151,7 +175,13 @@ export function Login({ onLogin }: LoginProps) {
             </div>
             <div className="flex items-center justify-between">
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" className="rounded border-slate-300" />
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={loading}
+                />
                 <span className="text-slate-600">Recordarme</span>
               </label>
               <button type="button" className="text-blue-600 hover:text-blue-700" disabled={loading}>
