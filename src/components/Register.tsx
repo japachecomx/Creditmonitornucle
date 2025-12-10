@@ -50,25 +50,6 @@ export function Register({ onBackToLogin }: RegisterProps) {
       if (error) throw error;
 
       if (data.user) {
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert({
-            id: data.user.id,
-            full_name: fullName,
-            role: 'Consultant',
-            permissions: {
-              grant_credit: false,
-              request_insurance: false,
-              purchase_supplies: false,
-            },
-            active: true,
-          });
-
-        if (profileError) {
-          console.error('Error creating user profile:', profileError);
-          throw new Error('Error al crear el perfil de usuario. Por favor, intenta nuevamente.');
-        }
-
         setSuccess(true);
       }
     } catch (err: any) {
