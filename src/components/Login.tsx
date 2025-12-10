@@ -5,12 +5,14 @@ import { Label } from './ui/label';
 import { Card } from './ui/card';
 import sinectaLogo from '../assets/sinecta_logotipo-2-03_(9).png';
 import { supabase } from '../lib/supabase';
+import { Register } from './Register';
 
 interface LoginProps {
   onLogin: () => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
+  const [showRegister, setShowRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,6 +58,10 @@ export function Login({ onLogin }: LoginProps) {
       setLoading(false);
     }
   };
+
+  if (showRegister) {
+    return <Register onBackToLogin={() => setShowRegister(false)} />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 p-6">
@@ -150,6 +156,17 @@ export function Login({ onLogin }: LoginProps) {
             </svg>
             {loading ? 'Conectando...' : 'Google'}
           </Button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => setShowRegister(true)}
+              className="text-blue-600 hover:text-blue-700"
+              disabled={loading}
+            >
+              ¿No tienes una cuenta? Regístrate
+            </button>
+          </div>
         </Card>
 
         <p className="text-center text-slate-500">
