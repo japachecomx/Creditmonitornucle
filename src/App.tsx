@@ -15,6 +15,7 @@ import { Clients } from './components/Clients';
 import { Documents } from './components/Documents';
 import { Settings } from './components/Settings';
 import { Products } from './components/Products';
+import { supabase } from './lib/supabase';
 
 type View = 'login' | 'onboarding' | 'dashboard' | 'credits' | 'credit-detail' | 'add-credit' | 'insurance' | 'insurance-detail' | 'add-insurance' | 'plot-risk' | 'risk-climate' | 'clients' | 'documents' | 'settings' | 'products';
 
@@ -25,6 +26,34 @@ export default function App() {
   const [selectedCreditId, setSelectedCreditId] = useState<string | null>(null);
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsAuthenticated(true);
+        setHasCompletedOnboarding(true);
+        setCurrentView('dashboard');
+      }
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsAuthenticated(true);
+        setHasCompletedOnboarding(true);
+        setCurrentView('dashboard');
+      } else {
+        setIsAuthenticated(false);
+        setHasCompletedOnboarding(false);
+        setCurrentView('login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -40,7 +69,8 @@ export default function App() {
     setCurrentView('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
     setCurrentView('login');
   };
@@ -88,6 +118,17 @@ export default function App() {
         return <Dashboard onNavigate={handleNavigate} />;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-slate-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
