@@ -39,18 +39,45 @@ export default function App() {
 
     if (selectError) {
       console.error('Error fetching profile:', selectError);
-      throw new Error('Error al verificar el perfil de usuario');
-    }
+      console.log('Waiting for profile to be accessible...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-    if (!existingProfile) {
-      console.log('No profile found - waiting for trigger to create it');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const { data: retryProfile } = await supabase
+      const { data: retryProfile, error: retryError } = await supabase
         .from('user_profiles')
         .select('id, active')
         .eq('id', userId)
         .maybeSingle();
+
+      if (retryError) {
+        console.error('Retry error:', retryError);
+        throw new Error(`Error de permisos: ${retryError.message}`);
+      }
+
+      if (!retryProfile) {
+        throw new Error('Usuario no registrado en el sistema');
+      }
+
+      if (!retryProfile.active) {
+        throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
+      }
+
+      return retryProfile.active;
+    }
+
+    if (!existingProfile) {
+      console.log('No profile found - waiting for trigger to create it');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const { data: retryProfile, error: retryError } = await supabase
+        .from('user_profiles')
+        .select('id, active')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (retryError) {
+        console.error('Retry error:', retryError);
+        throw new Error(`Error al buscar perfil: ${retryError.message}`);
+      }
 
       if (!retryProfile) {
         throw new Error('Usuario no registrado en el sistema');
