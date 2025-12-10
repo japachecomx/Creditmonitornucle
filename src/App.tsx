@@ -26,7 +26,8 @@ export default function App() {
   const [selectedCreditId, setSelectedCreditId] = useState<string | null>(null);
   const [selectedInsuranceId, setSelectedInsuranceId] = useState<string | null>(null);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   const checkUserProfile = async (userId: string, maxRetries = 3) => {
     console.log('Checking profile for user:', userId);
@@ -76,19 +77,49 @@ export default function App() {
 
   useEffect(() => {
     let isProcessing = false;
+    let mounted = true;
+    let loadingTimeout: NodeJS.Timeout | null = null;
 
     const checkAndSetupUser = async (session: any) => {
-      if (isProcessing || !session?.user) return;
+      if (!mounted || isProcessing || !session?.user) {
+        console.log('Skipping setup - mounted:', mounted, 'isProcessing:', isProcessing, 'hasUser:', !!session?.user);
+        if (mounted && !session?.user) {
+          setLoading(false);
+          setInitialCheckDone(true);
+        }
+        return;
+      }
 
       isProcessing = true;
       setLoading(true);
+
+      loadingTimeout = setTimeout(() => {
+        console.error('Loading timeout - forcing return to login');
+        if (mounted) {
+          setLoading(false);
+          setIsAuthenticated(false);
+          setCurrentView('login');
+          alert('La autenticación tardó demasiado. Por favor, intenta de nuevo.');
+        }
+        isProcessing = false;
+      }, 15000);
 
       try {
         console.log('Processing user session:', session.user.id);
 
         await new Promise(resolve => setTimeout(resolve, 1500));
 
+        if (!mounted) {
+          console.log('Component unmounted, aborting');
+          return;
+        }
+
         const hasProfile = await checkUserProfile(session.user.id);
+
+        if (!mounted) {
+          console.log('Component unmounted after profile check');
+          return;
+        }
 
         if (hasProfile) {
           console.log('User authenticated successfully');
@@ -97,6 +128,8 @@ export default function App() {
           setCurrentView('dashboard');
         }
       } catch (err: any) {
+        if (!mounted) return;
+
         console.error('Error during authentication:', err);
         alert(`Error al autenticar: ${err.message}`);
         await supabase.auth.signOut();
@@ -104,7 +137,13 @@ export default function App() {
         setHasCompletedOnboarding(false);
         setCurrentView('login');
       } finally {
-        setLoading(false);
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+        }
+        if (mounted) {
+          setLoading(false);
+          setInitialCheckDone(true);
+        }
         isProcessing = false;
       }
     };
@@ -112,30 +151,61 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
+      console.log('Auth state changed:', event, 'Has session:', !!session);
 
       if (event === 'SIGNED_IN' && session) {
         await checkAndSetupUser(session);
       } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
         isProcessing = false;
-        setLoading(false);
-        setIsAuthenticated(false);
-        setHasCompletedOnboarding(false);
-        setCurrentView('login');
-      } else if (event === 'INITIAL_SESSION' && session) {
-        await checkAndSetupUser(session);
+        if (loadingTimeout) {
+          clearTimeout(loadingTimeout);
+        }
+        if (mounted) {
+          setLoading(false);
+          setIsAuthenticated(false);
+          setHasCompletedOnboarding(false);
+          setCurrentView('login');
+          setInitialCheckDone(true);
+        }
+      } else if (event === 'INITIAL_SESSION') {
+        if (session) {
+          console.log('Initial session found, setting up user');
+          await checkAndSetupUser(session);
+        } else {
+          console.log('No initial session, showing login');
+          if (mounted) {
+            setLoading(false);
+            setIsAuthenticated(false);
+            setCurrentView('login');
+            setInitialCheckDone(true);
+          }
+        }
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        if (!isAuthenticated) {
+        if (!isAuthenticated && mounted) {
           await checkAndSetupUser(session);
         }
       }
     });
 
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && !initialCheckDone) {
+        console.log('Safety timeout - ensuring loading is cleared');
+        setLoading(false);
+        setInitialCheckDone(true);
+      }
+    }, 5000);
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       isProcessing = false;
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+      clearTimeout(safetyTimeout);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, initialCheckDone]);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
