@@ -222,9 +222,39 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setIsAuthenticated(false);
-    setCurrentView('login');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        const provider = session.user.app_metadata?.provider;
+
+        if (provider === 'google') {
+          const accessToken = session.provider_token;
+
+          if (accessToken) {
+            try {
+              await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${accessToken}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+                }
+              });
+            } catch (error) {
+              console.error('Error al revocar token de Google:', error);
+            }
+          }
+        }
+      }
+
+      await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setCurrentView('login');
+    } catch (error) {
+      console.error('Error durante el cierre de sesión:', error);
+      await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setCurrentView('login');
+    }
   };
 
   const handleNavigate = (view: View, id?: string) => {
