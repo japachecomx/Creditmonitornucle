@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card } from './ui/card';
-import sinectaLogo from 'figma:asset/f70da0be9e595616e423394291df5a6eb3f78ed2.png';
+import sinectaLogo from '../assets/sinecta_logotipo-2-03_(9).png';
 
 interface LoginProps {
   onLogin: () => void;
@@ -23,8 +23,8 @@ export function Login({ onLogin }: LoginProps) {
       <div className="w-full max-w-md space-y-8">
         {/* Logo and Header */}
         <div className="text-center space-y-4">
-          <div className="flex justify-center mb-6">
-            <img src={sinectaLogo} alt="Sinecta" className="h-16" />
+          <div className="flex justify-center mb-8">
+            <img src={sinectaLogo} alt="Sinecta" className="h-20 w-auto object-contain" />
           </div>
           <div>
             <h1 className="text-slate-900">Sinecta CreditMonitor</h1>
