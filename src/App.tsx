@@ -28,134 +28,114 @@ export default function App() {
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const checkUserProfile = async (userId: string) => {
+  const checkUserProfile = async (userId: string, maxRetries = 3) => {
     console.log('Checking profile for user:', userId);
 
-    const { data: profileData, error: profileError } = await supabase
-      .rpc('get_user_profile_status', { user_id: userId });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`Profile check attempt ${attempt}/${maxRetries}`);
 
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      console.log('Waiting for profile to be created...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const { data: retryData, error: retryError } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .rpc('get_user_profile_status', { user_id: userId });
 
-      if (retryError) {
-        console.error('Retry error:', retryError);
-        throw new Error(`Error al verificar perfil: ${retryError.message}`);
+      if (profileError) {
+        console.error(`Attempt ${attempt} - Error fetching profile:`, profileError);
+
+        if (attempt < maxRetries) {
+          console.log(`Waiting 2 seconds before retry...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+
+        throw new Error(`Error al verificar perfil: ${profileError.message}`);
       }
 
-      if (!retryData || retryData.length === 0) {
-        throw new Error('Usuario no registrado en el sistema');
+      if (!profileData || profileData.length === 0) {
+        console.log(`Attempt ${attempt} - No profile found yet`);
+
+        if (attempt < maxRetries) {
+          console.log(`Waiting 2 seconds for profile creation...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+
+        throw new Error('No se pudo crear tu perfil de usuario. Por favor, contacta al administrador.');
       }
 
-      const profile = retryData[0];
+      const profile = profileData[0];
+
       if (!profile.active) {
         throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
       }
 
-      console.log('Profile found after retry:', profile);
+      console.log('Profile found and active:', profile);
       return profile.active;
     }
 
-    if (!profileData || profileData.length === 0) {
-      console.log('No profile found - waiting for trigger to create it');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const { data: retryData, error: retryError } = await supabase
-        .rpc('get_user_profile_status', { user_id: userId });
-
-      if (retryError) {
-        console.error('Retry error:', retryError);
-        throw new Error(`Error al buscar perfil: ${retryError.message}`);
-      }
-
-      if (!retryData || retryData.length === 0) {
-        throw new Error('Usuario no registrado en el sistema');
-      }
-
-      const profile = retryData[0];
-      if (!profile.active) {
-        throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
-      }
-
-      console.log('Profile found after retry:', profile);
-      return profile.active;
-    }
-
-    const profile = profileData[0];
-    if (!profile.active) {
-      throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
-    }
-
-    console.log('Profile found and active:', profile);
-    return profile.active;
+    throw new Error('No se pudo verificar tu perfil después de varios intentos.');
   };
 
   useEffect(() => {
+    let isProcessing = false;
+
+    const checkAndSetupUser = async (session: any) => {
+      if (isProcessing || !session?.user) return;
+
+      isProcessing = true;
+      setLoading(true);
+
+      try {
+        console.log('Processing user session:', session.user.id);
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const hasProfile = await checkUserProfile(session.user.id);
+
+        if (hasProfile) {
+          console.log('User authenticated successfully');
+          setIsAuthenticated(true);
+          setHasCompletedOnboarding(true);
+          setCurrentView('dashboard');
+        }
+      } catch (err: any) {
+        console.error('Error during authentication:', err);
+        alert(`Error al autenticar: ${err.message}`);
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        setHasCompletedOnboarding(false);
+        setCurrentView('login');
+      } finally {
+        setLoading(false);
+        isProcessing = false;
+      }
+    };
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session);
+      console.log('Auth state changed:', event);
 
-      if (event === 'SIGNED_IN' && session && session.user) {
-        try {
-          console.log('SIGNED_IN event detected', session.user);
-
-          const hasProfile = await checkUserProfile(session.user.id);
-
-          console.log('Has profile:', hasProfile);
-
-          if (hasProfile) {
-            console.log('Setting authenticated state');
-            setIsAuthenticated(true);
-            setHasCompletedOnboarding(true);
-            setCurrentView('dashboard');
-            setLoading(false);
-          }
-        } catch (err: any) {
-          console.error('Error checking user profile:', err);
-          console.error('Error message:', err.message);
-          alert(`Error al autenticar: ${err.message}`);
-          await supabase.auth.signOut();
-          setIsAuthenticated(false);
-          setHasCompletedOnboarding(false);
-          setCurrentView('login');
-          setLoading(false);
-        }
+      if (event === 'SIGNED_IN' && session) {
+        await checkAndSetupUser(session);
       } else if (event === 'SIGNED_OUT') {
+        isProcessing = false;
+        setLoading(false);
         setIsAuthenticated(false);
         setHasCompletedOnboarding(false);
         setCurrentView('login');
+      } else if (event === 'INITIAL_SESSION' && session) {
+        await checkAndSetupUser(session);
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        setIsAuthenticated(true);
-      } else if (session && session.user) {
-        try {
-          const hasProfile = await checkUserProfile(session.user.id);
-
-          if (hasProfile) {
-            setIsAuthenticated(true);
-            setHasCompletedOnboarding(true);
-            setCurrentView('dashboard');
-          }
-        } catch (err) {
-          console.error('Error checking user profile:', err);
-          await supabase.auth.signOut();
-          setIsAuthenticated(false);
-          setHasCompletedOnboarding(false);
-          setCurrentView('login');
+        if (!isAuthenticated) {
+          await checkAndSetupUser(session);
         }
-      } else {
-        setIsAuthenticated(false);
-        setHasCompletedOnboarding(false);
-        setCurrentView('login');
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      isProcessing = false;
+    };
+  }, [isAuthenticated]);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
