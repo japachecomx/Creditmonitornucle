@@ -28,6 +28,43 @@ export default function App() {
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const ensureUserProfile = async (userId: string, userEmail: string, fullName?: string) => {
+    const { data: existingProfile } = await supabase
+      .from('user_profiles')
+      .select('id, active')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          full_name: fullName || userEmail.split('@')[0],
+          role: 'Consultant',
+          permissions: {
+            grant_credit: false,
+            request_insurance: false,
+            purchase_supplies: false,
+          },
+          active: true,
+        });
+
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+        throw new Error('No se pudo crear el perfil de usuario');
+      }
+
+      return true;
+    }
+
+    if (!existingProfile.active) {
+      throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
+    }
+
+    return existingProfile.active;
+  };
+
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -37,11 +74,20 @@ export default function App() {
           console.error('Error getting session:', error);
         }
 
-        if (session) {
+        if (session && session.user) {
           console.log('Active session found:', session);
-          setIsAuthenticated(true);
-          setHasCompletedOnboarding(true);
-          setCurrentView('dashboard');
+
+          const hasProfile = await ensureUserProfile(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name
+          );
+
+          if (hasProfile) {
+            setIsAuthenticated(true);
+            setHasCompletedOnboarding(true);
+            setCurrentView('dashboard');
+          }
         }
       } catch (err) {
         console.error('Error in checkSession:', err);
@@ -54,24 +100,56 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session);
 
-      if (event === 'SIGNED_IN' && session) {
-        setIsAuthenticated(true);
-        setHasCompletedOnboarding(true);
-        setCurrentView('dashboard');
-        setLoading(false);
+      if (event === 'SIGNED_IN' && session && session.user) {
+        try {
+          const hasProfile = await ensureUserProfile(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name
+          );
+
+          if (hasProfile) {
+            setIsAuthenticated(true);
+            setHasCompletedOnboarding(true);
+            setCurrentView('dashboard');
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error('Error ensuring user profile:', err);
+          await supabase.auth.signOut();
+          setIsAuthenticated(false);
+          setHasCompletedOnboarding(false);
+          setCurrentView('login');
+        }
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
         setHasCompletedOnboarding(false);
         setCurrentView('login');
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setIsAuthenticated(true);
-      } else if (session) {
-        setIsAuthenticated(true);
-        setHasCompletedOnboarding(true);
-        setCurrentView('dashboard');
+      } else if (session && session.user) {
+        try {
+          const hasProfile = await ensureUserProfile(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name
+          );
+
+          if (hasProfile) {
+            setIsAuthenticated(true);
+            setHasCompletedOnboarding(true);
+            setCurrentView('dashboard');
+          }
+        } catch (err) {
+          console.error('Error ensuring user profile:', err);
+          await supabase.auth.signOut();
+          setIsAuthenticated(false);
+          setHasCompletedOnboarding(false);
+          setCurrentView('login');
+        }
       } else {
         setIsAuthenticated(false);
         setHasCompletedOnboarding(false);

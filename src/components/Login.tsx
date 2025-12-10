@@ -18,6 +18,34 @@ export function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const ensureUserProfile = async (userId: string, userEmail: string, fullName?: string) => {
+    const { data: existingProfile } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          full_name: fullName || userEmail.split('@')[0],
+          role: 'Consultant',
+          permissions: {
+            grant_credit: false,
+            request_insurance: false,
+            purchase_supplies: false,
+          },
+          active: true,
+        });
+
+      if (profileError) {
+        console.error('Error creating user profile:', profileError);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -31,7 +59,12 @@ export function Login({ onLogin }: LoginProps) {
 
       if (error) throw error;
 
-      if (data.session) {
+      if (data.session && data.user) {
+        await ensureUserProfile(
+          data.user.id,
+          data.user.email || '',
+          data.user.user_metadata?.full_name
+        );
         console.log('Login successful:', data.session);
       }
     } catch (err: any) {
