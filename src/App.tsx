@@ -101,23 +101,10 @@ export default function App() {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error('Error getting session:', error);
-        }
-
-        if (session && session.user) {
-          console.log('Active session found:', session);
-
-          const hasProfile = await checkUserProfile(session.user.id);
-
-          if (hasProfile) {
-            setIsAuthenticated(true);
-            setHasCompletedOnboarding(true);
-            setCurrentView('dashboard');
-          }
-        }
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        setHasCompletedOnboarding(false);
+        setCurrentView('login');
       } catch (err) {
         console.error('Error in checkSession:', err);
       } finally {
