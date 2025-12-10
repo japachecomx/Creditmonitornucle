@@ -18,7 +18,7 @@ import {
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useState } from 'react';
 import { DonEnrique } from './DonEnrique';
-import donEnriqueLogo from 'figma:asset/e04e052e0e276377528242b517afe7dfaa244d6d.png';
+import donEnriqueLogo from '../assets/sinecta_logotipo-2-03_(11) copy.png';
 
 interface DashboardProps {
   onNavigate: (view: string, id?: string) => void;

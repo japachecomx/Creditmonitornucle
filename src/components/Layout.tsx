@@ -24,7 +24,7 @@ import {
   ShoppingBag,
   UserCog,
 } from 'lucide-react';
-import sinectaLogo from 'figma:asset/e04e052e0e276377528242b517afe7dfaa244d6d.png';
+import sinectaLogo from '../assets/sinecta_logotipo-2-03_(11) copy.png';
 
 interface LayoutProps {
   children: React.ReactNode;
