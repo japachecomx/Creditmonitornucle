@@ -28,7 +28,7 @@ export default function App() {
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const checkUserProfile = async (userId: string) => {
+  const ensureUserProfileForOAuth = async (userId: string, userEmail: string, fullName?: string, provider?: string) => {
     const { data: existingProfile } = await supabase
       .from('user_profiles')
       .select('id, active')
@@ -36,7 +36,30 @@ export default function App() {
       .maybeSingle();
 
     if (!existingProfile) {
-      throw new Error('Usuario no registrado en el sistema');
+      if (provider && provider !== 'email') {
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: userId,
+            full_name: fullName || userEmail.split('@')[0],
+            role: 'Consultant',
+            permissions: {
+              grant_credit: false,
+              request_insurance: false,
+              purchase_supplies: false,
+            },
+            active: true,
+          });
+
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+          throw new Error('No se pudo crear el perfil de usuario');
+        }
+
+        return true;
+      } else {
+        throw new Error('Usuario no registrado en el sistema');
+      }
     }
 
     if (!existingProfile.active) {
@@ -58,7 +81,13 @@ export default function App() {
         if (session && session.user) {
           console.log('Active session found:', session);
 
-          const hasProfile = await checkUserProfile(session.user.id);
+          const provider = session.user.app_metadata?.provider;
+          const hasProfile = await ensureUserProfileForOAuth(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name || session.user.user_metadata?.name,
+            provider
+          );
 
           if (hasProfile) {
             setIsAuthenticated(true);
@@ -82,7 +111,13 @@ export default function App() {
 
       if (event === 'SIGNED_IN' && session && session.user) {
         try {
-          const hasProfile = await checkUserProfile(session.user.id);
+          const provider = session.user.app_metadata?.provider;
+          const hasProfile = await ensureUserProfileForOAuth(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name || session.user.user_metadata?.name,
+            provider
+          );
 
           if (hasProfile) {
             setIsAuthenticated(true);
@@ -105,7 +140,13 @@ export default function App() {
         setIsAuthenticated(true);
       } else if (session && session.user) {
         try {
-          const hasProfile = await checkUserProfile(session.user.id);
+          const provider = session.user.app_metadata?.provider;
+          const hasProfile = await ensureUserProfileForOAuth(
+            session.user.id,
+            session.user.email || '',
+            session.user.user_metadata?.full_name || session.user.user_metadata?.name,
+            provider
+          );
 
           if (hasProfile) {
             setIsAuthenticated(true);
