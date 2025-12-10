@@ -66,6 +66,7 @@ export function Register({ onBackToLogin }: RegisterProps) {
 
         if (profileError) {
           console.error('Error creating user profile:', profileError);
+          throw new Error('Error al crear el perfil de usuario. Por favor, intenta nuevamente.');
         }
 
         setSuccess(true);

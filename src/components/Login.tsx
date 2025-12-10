@@ -18,32 +18,24 @@ export function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ensureUserProfile = async (userId: string, userEmail: string, fullName?: string) => {
+  const checkUserProfile = async (userId: string) => {
     const { data: existingProfile } = await supabase
       .from('user_profiles')
-      .select('id')
+      .select('id, active')
       .eq('id', userId)
       .maybeSingle();
 
     if (!existingProfile) {
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: userId,
-          full_name: fullName || userEmail.split('@')[0],
-          role: 'Consultant',
-          permissions: {
-            grant_credit: false,
-            request_insurance: false,
-            purchase_supplies: false,
-          },
-          active: true,
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-      }
+      await supabase.auth.signOut();
+      throw new Error('Nombre de usuario o contraseña no encontrado');
     }
+
+    if (!existingProfile.active) {
+      await supabase.auth.signOut();
+      throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
+    }
+
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,11 +52,7 @@ export function Login({ onLogin }: LoginProps) {
       if (error) throw error;
 
       if (data.session && data.user) {
-        await ensureUserProfile(
-          data.user.id,
-          data.user.email || '',
-          data.user.user_metadata?.full_name
-        );
+        await checkUserProfile(data.user.id);
         console.log('Login successful:', data.session);
       }
     } catch (err: any) {

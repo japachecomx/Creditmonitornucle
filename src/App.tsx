@@ -28,7 +28,7 @@ export default function App() {
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const ensureUserProfile = async (userId: string, userEmail: string, fullName?: string) => {
+  const checkUserProfile = async (userId: string) => {
     const { data: existingProfile } = await supabase
       .from('user_profiles')
       .select('id, active')
@@ -36,26 +36,7 @@ export default function App() {
       .maybeSingle();
 
     if (!existingProfile) {
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: userId,
-          full_name: fullName || userEmail.split('@')[0],
-          role: 'Consultant',
-          permissions: {
-            grant_credit: false,
-            request_insurance: false,
-            purchase_supplies: false,
-          },
-          active: true,
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-        throw new Error('No se pudo crear el perfil de usuario');
-      }
-
-      return true;
+      throw new Error('Usuario no registrado en el sistema');
     }
 
     if (!existingProfile.active) {
@@ -77,11 +58,7 @@ export default function App() {
         if (session && session.user) {
           console.log('Active session found:', session);
 
-          const hasProfile = await ensureUserProfile(
-            session.user.id,
-            session.user.email || '',
-            session.user.user_metadata?.full_name
-          );
+          const hasProfile = await checkUserProfile(session.user.id);
 
           if (hasProfile) {
             setIsAuthenticated(true);
@@ -105,11 +82,7 @@ export default function App() {
 
       if (event === 'SIGNED_IN' && session && session.user) {
         try {
-          const hasProfile = await ensureUserProfile(
-            session.user.id,
-            session.user.email || '',
-            session.user.user_metadata?.full_name
-          );
+          const hasProfile = await checkUserProfile(session.user.id);
 
           if (hasProfile) {
             setIsAuthenticated(true);
@@ -118,7 +91,7 @@ export default function App() {
             setLoading(false);
           }
         } catch (err) {
-          console.error('Error ensuring user profile:', err);
+          console.error('Error checking user profile:', err);
           await supabase.auth.signOut();
           setIsAuthenticated(false);
           setHasCompletedOnboarding(false);
@@ -132,11 +105,7 @@ export default function App() {
         setIsAuthenticated(true);
       } else if (session && session.user) {
         try {
-          const hasProfile = await ensureUserProfile(
-            session.user.id,
-            session.user.email || '',
-            session.user.user_metadata?.full_name
-          );
+          const hasProfile = await checkUserProfile(session.user.id);
 
           if (hasProfile) {
             setIsAuthenticated(true);
@@ -144,7 +113,7 @@ export default function App() {
             setCurrentView('dashboard');
           }
         } catch (err) {
-          console.error('Error ensuring user profile:', err);
+          console.error('Error checking user profile:', err);
           await supabase.auth.signOut();
           setIsAuthenticated(false);
           setHasCompletedOnboarding(false);
