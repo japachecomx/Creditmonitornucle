@@ -76,11 +76,35 @@ export default function App() {
   };
 
   useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && isAuthenticated) {
+        console.log('Tab became visible, checking session validity');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error || !session) {
+          console.log('Session invalid or expired, logging out');
+          setIsAuthenticated(false);
+          setHasCompletedOnboarding(false);
+          setCurrentView('login');
+        } else {
+          console.log('Session still valid');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     let isProcessing = false;
     let mounted = true;
     let loadingTimeout: NodeJS.Timeout | null = null;
 
-    const checkAndSetupUser = async (session: any) => {
+    const checkAndSetupUser = async (session: any, isInitial: boolean = false) => {
       if (!mounted || isProcessing || !session?.user) {
         console.log('Skipping setup - mounted:', mounted, 'isProcessing:', isProcessing, 'hasUser:', !!session?.user);
         if (mounted && !session?.user) {
@@ -93,21 +117,25 @@ export default function App() {
       isProcessing = true;
       setLoading(true);
 
-      loadingTimeout = setTimeout(() => {
-        console.error('Loading timeout - forcing return to login');
-        if (mounted) {
-          setLoading(false);
-          setIsAuthenticated(false);
-          setCurrentView('login');
-          alert('La autenticación tardó demasiado. Por favor, intenta de nuevo.');
-        }
-        isProcessing = false;
-      }, 15000);
+      if (isInitial) {
+        loadingTimeout = setTimeout(() => {
+          console.error('Initial loading timeout - forcing return to login');
+          if (mounted) {
+            setLoading(false);
+            setIsAuthenticated(false);
+            setCurrentView('login');
+            alert('La autenticación tardó demasiado. Por favor, intenta de nuevo.');
+          }
+          isProcessing = false;
+        }, 15000);
+      }
 
       try {
         console.log('Processing user session:', session.user.id);
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        if (isInitial) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
 
         if (!mounted) {
           console.log('Component unmounted, aborting');
@@ -154,7 +182,7 @@ export default function App() {
       console.log('Auth state changed:', event, 'Has session:', !!session);
 
       if (event === 'SIGNED_IN' && session) {
-        await checkAndSetupUser(session);
+        await checkAndSetupUser(session, false);
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
         isProcessing = false;
@@ -171,7 +199,7 @@ export default function App() {
       } else if (event === 'INITIAL_SESSION') {
         if (session) {
           console.log('Initial session found, setting up user');
-          await checkAndSetupUser(session);
+          await checkAndSetupUser(session, true);
         } else {
           console.log('No initial session, showing login');
           if (mounted) {
@@ -182,8 +210,13 @@ export default function App() {
           }
         }
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        if (!isAuthenticated && mounted) {
-          await checkAndSetupUser(session);
+        console.log('Token refreshed, session still valid');
+        if (mounted && !isAuthenticated) {
+          setIsAuthenticated(true);
+          setHasCompletedOnboarding(true);
+          if (currentView === 'login') {
+            setCurrentView('dashboard');
+          }
         }
       }
     });
@@ -205,7 +238,7 @@ export default function App() {
       }
       clearTimeout(safetyTimeout);
     };
-  }, [isAuthenticated, initialCheckDone]);
+  }, [isAuthenticated, initialCheckDone, currentView]);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -239,6 +272,7 @@ export default function App() {
                   'Content-Type': 'application/x-www-form-urlencoded'
                 }
               });
+              console.log('Token de Google revocado exitosamente');
             } catch (error) {
               console.error('Error al revocar token de Google:', error);
             }
@@ -246,13 +280,36 @@ export default function App() {
         }
       }
 
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
+
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
       setIsAuthenticated(false);
+      setHasCompletedOnboarding(false);
       setCurrentView('login');
+      console.log('Sesión cerrada exitosamente');
     } catch (error) {
       console.error('Error durante el cierre de sesión:', error);
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
+
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('sb-')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
       setIsAuthenticated(false);
+      setHasCompletedOnboarding(false);
       setCurrentView('login');
     }
   };
