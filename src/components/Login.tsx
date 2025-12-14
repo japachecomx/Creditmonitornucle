@@ -35,29 +35,6 @@ export function Login({ onLogin }: LoginProps) {
     }
   }, []);
 
-  const checkUserProfile = async (userId: string) => {
-    const { data: profileData, error: profileError } = await supabase
-      .rpc('get_user_profile_status', { user_id: userId });
-
-    if (profileError) {
-      await supabase.auth.signOut();
-      throw new Error(`Error al verificar perfil: ${profileError.message}`);
-    }
-
-    if (!profileData || profileData.length === 0) {
-      await supabase.auth.signOut();
-      throw new Error('Nombre de usuario o contraseña no encontrado');
-    }
-
-    const profile = profileData[0];
-    if (!profile.active) {
-      await supabase.auth.signOut();
-      throw new Error('Tu cuenta ha sido desactivada. Contacta al administrador.');
-    }
-
-    return true;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -72,15 +49,13 @@ export function Login({ onLogin }: LoginProps) {
       if (error) throw error;
 
       if (data.session && data.user) {
-        await checkUserProfile(data.user.id);
-
         if (rememberMe) {
           localStorage.setItem(REMEMBER_ME_KEY, JSON.stringify({ email, password }));
         } else {
           localStorage.removeItem(REMEMBER_ME_KEY);
         }
 
-        console.log('Login successful:', data.session);
+        console.log('Login successful, session created');
       }
     } catch (err: any) {
       setError(err.message || 'Error al iniciar sesión');

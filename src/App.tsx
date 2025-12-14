@@ -105,8 +105,8 @@ export default function App() {
     let loadingTimeout: NodeJS.Timeout | null = null;
 
     const checkAndSetupUser = async (session: any, isInitial: boolean = false) => {
-      if (!mounted || isProcessing || !session?.user) {
-        console.log('Skipping setup - mounted:', mounted, 'isProcessing:', isProcessing, 'hasUser:', !!session?.user);
+      if (!mounted || !session?.user) {
+        console.log('Skipping setup - mounted:', mounted, 'hasUser:', !!session?.user);
         if (mounted && !session?.user) {
           setLoading(false);
           setInitialCheckDone(true);
@@ -114,21 +114,24 @@ export default function App() {
         return;
       }
 
+      if (isProcessing) {
+        console.log('Already processing, skipping duplicate call');
+        return;
+      }
+
       isProcessing = true;
       setLoading(true);
 
-      if (isInitial) {
-        loadingTimeout = setTimeout(() => {
-          console.error('Initial loading timeout - forcing return to login');
-          if (mounted) {
-            setLoading(false);
-            setIsAuthenticated(false);
-            setCurrentView('login');
-            alert('La autenticación tardó demasiado. Por favor, intenta de nuevo.');
-          }
-          isProcessing = false;
-        }, 15000);
-      }
+      loadingTimeout = setTimeout(() => {
+        console.error('Authentication timeout - forcing return to login');
+        if (mounted) {
+          setLoading(false);
+          setIsAuthenticated(false);
+          setCurrentView('login');
+          alert('La autenticación tardó demasiado. Por favor, intenta de nuevo.');
+        }
+        isProcessing = false;
+      }, 15000);
 
       try {
         console.log('Processing user session:', session.user.id);
@@ -182,6 +185,7 @@ export default function App() {
       console.log('Auth state changed:', event, 'Has session:', !!session);
 
       if (event === 'SIGNED_IN' && session) {
+        console.log('User signed in, processing authentication');
         await checkAndSetupUser(session, false);
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
@@ -211,13 +215,6 @@ export default function App() {
         }
       } else if (event === 'TOKEN_REFRESHED' && session) {
         console.log('Token refreshed, session still valid');
-        if (mounted && !isAuthenticated) {
-          setIsAuthenticated(true);
-          setHasCompletedOnboarding(true);
-          if (currentView === 'login') {
-            setCurrentView('dashboard');
-          }
-        }
       }
     });
 
@@ -227,7 +224,7 @@ export default function App() {
         setLoading(false);
         setInitialCheckDone(true);
       }
-    }, 5000);
+    }, 8000);
 
     return () => {
       mounted = false;
@@ -238,7 +235,7 @@ export default function App() {
       }
       clearTimeout(safetyTimeout);
     };
-  }, [isAuthenticated, initialCheckDone, currentView]);
+  }, []);
 
   const handleLogin = () => {
     setIsAuthenticated(true);
@@ -361,13 +358,14 @@ export default function App() {
   if (loading) {
     const hasOAuthParams = window.location.hash.includes('access_token') ||
                           window.location.search.includes('code=');
+    const isAuthenticating = hasOAuthParams || currentView === 'login';
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-slate-600 text-lg font-medium">
-            {hasOAuthParams ? 'Completando autenticación...' : 'Cargando...'}
+            {isAuthenticating ? 'Completando autenticación...' : 'Cargando...'}
           </p>
         </div>
       </div>
